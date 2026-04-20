@@ -1,6 +1,7 @@
 import sqlite3
 import asyncio
 import os
+import datetime
 
 DB_PATH = "bot_users.db"
 
@@ -12,6 +13,7 @@ def init_db():
             chat_id INTEGER PRIMARY KEY,
             username TEXT,
             subscribed BOOLEAN DEFAULT 0,
+            last_analysis_date TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -51,6 +53,45 @@ async def get_subscribed_users() -> list:
         cursor.execute('SELECT chat_id FROM users WHERE subscribed = 1')
         return [row[0] for row in cursor.fetchall()]
     return await asyncio.to_thread(_get)
+
+async def can_user_analyze(chat_id: int) -> tuple[bool, str]:
+    """
+    Verifica si el usuario puede pedir análisis hoy.
+    Retorna: (puede_usar, mensaje_error)
+    """
+    def _check():
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Obtener último análisis
+        cursor.execute('SELECT last_analysis_date FROM users WHERE chat_id = ?', (chat_id,))
+        row = cursor.fetchone()
+        
+        if not row or row[0] is None:
+            # Nunca ha pedido análisis
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            cursor.execute('UPDATE users SET last_analysis_date = ? WHERE chat_id = ?', (today, chat_id))
+            conn.commit()
+            conn.close()
+            return True, ""
+        
+        # Verificar si es hoy
+        last_date = datetime.datetime.strptime(row[0], "%Y-%m-%d").date()
+        today = datetime.datetime.now().date()
+        
+        if last_date == today:
+            # Ya pidió análisis hoy
+            conn.close()
+            return False, "⏰ Ya pediste un análisis hoy. Vuelve mañana para más picks."
+        
+        # Actualizar fecha
+        today_str = today.strftime("%Y-%m-%d")
+        cursor.execute('UPDATE users SET last_analysis_date = ? WHERE chat_id = ?', (today_str, chat_id))
+        conn.commit()
+        conn.close()
+        return True, ""
+    
+    return await asyncio.to_thread(_check)
 
 # Inicializa la DB
 init_db()

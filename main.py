@@ -32,11 +32,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def analisis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+        chat_id = update.effective_chat.id
+        
+        # VERIFICAR LÍMITE DIARIO
+        can_use, error_msg = await db.can_user_analyze(chat_id)
+        
+        if not can_use:
+            await update.message.reply_text(
+                error_msg,
+                parse_mode="Markdown"
+            )
+            return
+        
+        # Mensaje de "procesando"
         msg = await update.message.reply_text(
             "🔍 *Analizando datos con IA...*\n⏳ Esto puede tomar 10-15 segundos",
             parse_mode="Markdown"
         )
         
+        # Obtener datos de APIs
         data = await fetch_all_data_for_today()
         
         if "error" in data:
@@ -48,11 +62,14 @@ async def analisis(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         
+        # Generar análisis con IA (Groq/Llama 3)
         analysis_text = await generate_analysis(data)
         
+        # Truncar si es muy largo (límite de Telegram: 4096 chars)
         if len(analysis_text) > 4000:
             analysis_text = analysis_text[:3900] + "\n\n... _(mensaje truncado)_"
         
+        # Enviar análisis completo
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=msg.message_id,
@@ -97,3 +114,51 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muestra el estado de uso del usuario"""
+    chat_id = update.effective_chat.id
+    
+    def _get_status():
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute('SELECT last_analysis_date, subscribed FROM users WHERE chat_id = ?', (chat_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return "No tienes registro de uso."
+        
+        last_date = row[0]
+        subscribed = row[1]
+        
+        status = "📊 *TU ESTADO*\n\n"
+        status += f"Último análisis: {last_date or 'Nunca'}\n"
+        status += f"Notificaciones: {'✅ Activadas' if subscribed else '🔕 Desactivadas'}\n\n"
+        
+        if last_date:
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            if last_date == today:
+                status += "⏰ Ya usaste tu análisis hoy.\n"
+                status += "Vuelve mañana para otro pick."
+            else:
+                status += "✅ Puedes pedir análisis hoy."
+        
+        return status
+    
+    status_text = await asyncio.to_thread(_get_status)
+    await update.message.reply_text(status_text, parse_mode="Markdown")
+
+    def main():
+    if not BOT_TOKEN:
+        raise ValueError("⚠️ TELEGRAM_BOT_TOKEN no encontrado en .env")
+    
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("analisis", analisis))
+    app.add_handler(CommandHandler("estado", estado))  # NUEVO
+    app.add_handler(CommandHandler("suscribirse", suscribirse))
+    
+    logger.info("✅ Bot con IA iniciado. Escuchando comandos...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
