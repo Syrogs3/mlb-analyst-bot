@@ -24,7 +24,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚾ *Soy tu Analista MLB con IA*\n\n"
         "Uso datos avanzados (ERA, FIP, Clima, Odds) y Machine Learning para encontrar valor en las apuestas.\n\n"
         "Comandos:\n"
-        "/analisis - Genera reporte inteligente del día\n"
+        "/analisis - Genera reporte inteligente del día (1 por día)\n"
+        "/estado - Ver tu estado de uso\n"
         "/suscribirse - Alertas diarias\n\n"
         "⚠️ _Apuesta con responsabilidad._",
         parse_mode="Markdown"
@@ -81,46 +82,13 @@ async def analisis(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error en /analisis: {e}", exc_info=True)
         await update.message.reply_text(f"❌ Error: {str(e)[:100]}...")
 
-async def suscribirse(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    nuevo_estado = await db.toggle_subscription(chat_id)
-    estado_texto = "✅ ACTIVADAS" if nuevo_estado else "🔕 DESACTIVADAS"
-    
-    await update.message.reply_text(
-        f"🔔 *Notificaciones diarias: {estado_texto}*\n\n"
-        "Recibirás el análisis con IA automáticamente antes de los primeros juegos.",
-        parse_mode="Markdown"
-    )
-
-def main():
-    if not BOT_TOKEN:
-        raise ValueError("⚠️ TELEGRAM_BOT_TOKEN no encontrado en .env")
-    
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("analisis", analisis))
-    app.add_handler(CommandHandler("suscribirse", suscribirse))
-    
-    logger.info("✅ Bot con IA iniciado. Escuchando comandos...")
-    
-    # Para Render: usar polling con timeout
-    app.run_polling(
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
-        poll_interval=2.5,
-        timeout=30
-    )
-
-if __name__ == "__main__":
-    main()
-
-    async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Muestra el estado de uso del usuario"""
     chat_id = update.effective_chat.id
     
     def _get_status():
-        conn = sqlite3.connect(DB_PATH)
+        import sqlite3
+        conn = sqlite3.connect("bot_users.db")
         cursor = conn.cursor()
         cursor.execute('SELECT last_analysis_date, subscribed FROM users WHERE chat_id = ?', (chat_id,))
         row = cursor.fetchone()
@@ -149,7 +117,18 @@ if __name__ == "__main__":
     status_text = await asyncio.to_thread(_get_status)
     await update.message.reply_text(status_text, parse_mode="Markdown")
 
-    def main():
+async def suscribirse(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    nuevo_estado = await db.toggle_subscription(chat_id)
+    estado_texto = "✅ ACTIVADAS" if nuevo_estado else "🔕 DESACTIVADAS"
+    
+    await update.message.reply_text(
+        f"🔔 *Notificaciones diarias: {estado_texto}*\n\n"
+        "Recibirás el análisis con IA automáticamente antes de los primeros juegos.",
+        parse_mode="Markdown"
+    )
+
+def main():
     if not BOT_TOKEN:
         raise ValueError("⚠️ TELEGRAM_BOT_TOKEN no encontrado en .env")
     
@@ -157,8 +136,11 @@ if __name__ == "__main__":
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("analisis", analisis))
-    app.add_handler(CommandHandler("estado", estado))  # NUEVO
+    app.add_handler(CommandHandler("estado", estado))
     app.add_handler(CommandHandler("suscribirse", suscribirse))
     
     logger.info("✅ Bot con IA iniciado. Escuchando comandos...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True, poll_interval=2.5, timeout=30)
+
+if __name__ == "__main__":
+    main()
