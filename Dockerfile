@@ -2,12 +2,16 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Copiar requirements primero (mejor cache)
+# Copiar requirements primero
 COPY requirements.txt .
+
+# Instalar solo lo necesario (más rápido)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el resto del código
+# Copiar código
 COPY . .
 
-# Comando para ejecutar el bot
+# Eliminar archivos innecesarios para reducir tamaño
+RUN rm -rf __pycache__ .git venv .env
+
 CMD ["python", "main.py"]
