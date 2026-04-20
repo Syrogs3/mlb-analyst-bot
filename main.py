@@ -21,7 +21,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"¡Hola @{username}! 👋\n\n"
-        "⚾ *Soy tu Analista MLB con IA*\n\n"
+        "⚾ *Soy tu Analista MLB*\n\n"
         "Uso datos avanzados (ERA, FIP, Clima, Odds) y Machine Learning para encontrar valor en las apuestas.\n\n"
         "Comandos:\n"
         "/analisis - Genera reporte inteligente del día (1 por día)\n"
