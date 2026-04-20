@@ -14,43 +14,45 @@ except Exception as e:
     client = None
 
 SYSTEM_PROMPT = """
-Eres un analista profesional de apuestas deportivas de Béisbol (MLB) con 10+ años de experiencia.
-Tu especialidad es encontrar valor (+EV) en las líneas de apuestas.
+Eres un analista profesional de MLB especializado en encontrar valor en apuestas.
+
+TU MISIÓN:
+Analiza los datos y selecciona SOLO LOS 2 MEJORES PICKS del día.
 
 REGLAS:
-1. Analiza ERA, WHIP, K/9 de los pitchers
-2. Considera el clima: viento >10mph afecta totals
-3. Busca discrepancias entre odds y probabilidad real
-4. Si hay "TBA" en pitchers, enfócate en estadísticas de equipo
+1. Sé MUY selectivo - solo elige si hay valor claro
+2. Basa tus picks en: ERA, clima, splits, tendencias
+3. Nivel de confianza: 1-10 (solo 7+ si hay valor real)
+4. Explicación: MÁXIMO 2 líneas, directo al punto
 
-FORMATO DE RESPUESTA:
-📊 *ANÁLISIS MLB - [Fecha]*
+FORMATO OBLIGATORIO:
+📊 *MLB PICKS - [Fecha]*
 
-🎯 *TOP PICK (Confianza X/10)*
-• [Selección]
-• *Razón:* [Explicación técnica]
+🎯 **PICK 1**
+• *Apuesta:* [Equipo/Línea]
+• *Confianza:* ⭐⭐⭐⭐⭐⭐⭐⭐ (X/10)
+• *Por qué:* [Explicación en 1-2 líneas]
 
-🔥 **PARLAY SUGERIDO**
-1. [Pick 1]
-2. [Pick 2]
-3. [Pick 3]
-• *Explicación:* [Correlación]
+🎯 **PICK 2**
+• *Apuesta:* [Equipo/Línea]
+• *Confianza:* ⭐⭐⭐⭐⭐⭐ (X/10)
+• *Por qué:* [Explicación en 1-2 líneas]
 
-⚠️ *RISGOS*
-• [1-2 riesgos]
+⚠️ *Nota:* {Si no hay picks claros, di "Hoy no hay valor claro. Mejor no apostar."}
 
-Sé específico y usa datos del JSON.
+Sé honesto. Si no hay valor, no inventes picks.
 """
 
 async def generate_analysis(data: dict) -> str:
-    """Genera el análisis usando Groq (Llama 3.3)."""
+    """Genera análisis con SOLO 2 picks principales."""
     if client is None:
-        return "❌ Error: Groq no está configurado. Revisa tu GROQ_API_KEY en .env"
+        return "❌ Error: Groq no configurado. Revisa GROQ_API_KEY"
     
     if not data or "games" not in data or len(data["games"]) == 0:
-        return "❌ No hay juegos disponibles para analizar."
+        return "❌ No hay juegos hoy."
     
     try:
+        # Preparar datos para IA (primeros 5 juegos)
         games_preview = data["games"][:5]
         
         clean_data = []
@@ -58,34 +60,34 @@ async def generate_analysis(data: dict) -> str:
             clean_data.append({
                 "matchup": f"{g['away_team']} @ {g['home_team']}",
                 "pitchers": f"{g['away_pitcher_name']} vs {g['home_pitcher_name']}",
+                "home_era": g.get('home_stats', {}).get('era', 'N/A'),
+                "away_era": g.get('away_stats', {}).get('era', 'N/A'),
                 "odds": g.get('odds'),
-                "weather": g.get('weather'),
-                "home_stats": g.get('home_stats'),
-                "away_stats": g.get('away_stats')
+                "weather": g.get('weather')
             })
         
-        data_json_str = json.dumps(clean_data, indent=2, ensure_ascii=False)
+        data_json = json.dumps(clean_data, indent=2, ensure_ascii=False)
         
-        logger.info("🤖 Enviando datos a Groq (Llama 3.3)...")
+        logger.info("🤖 Generando 2 picks con IA...")
         
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",  # ✅ MODELO ACTUALIZADO
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Analiza estos juegos de MLB:\n\n{data_json_str}"}
+                {"role": "user", "content": f"Datos de hoy:\n{data_json}"}
             ],
-            temperature=0.2,
-            max_tokens=1000
+            temperature=0.1,  # Más determinista
+            max_tokens=500    # Respuesta corta
         )
         
         analysis = response.choices[0].message.content
-        logger.info("✅ Análisis generado con Groq")
+        logger.info("✅ Picks generados")
         return analysis
         
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"❌ Error con Groq: {error_msg}")
+        logger.error(f"❌ Error Groq: {error_msg}")
         
         if "api_key" in error_msg.lower():
-            return "❌ Error de API Key: Verifica GROQ_API_KEY en .env"
-        return f"❌ Error al generar análisis: {error_msg[:100]}..."
+            return "❌ Error: Verifica GROQ_API_KEY"
+        return f"❌ Error: {error_msg[:80]}"
