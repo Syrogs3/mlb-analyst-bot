@@ -36,27 +36,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analisis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat_id = update.effective_chat.id
-        
-        # VERIFICAR LÍMITE DIARIO
-        #can_use, error_msg = await db.can_user_analyze(chat_id)
-        
-        #if not can_use:
-        #    await update.message.reply_text(
-        #        error_msg,
-                parse_mode="Markdown"
-            )
-            return
-        
-        # Mensaje de "procesando"
+
+        # 🔒 LÍMITE DIARIO DESHABILITADO PARA PRUEBAS
+        # can_use, error_msg = await db.can_user_analyze(chat_id)
+        # if not can_use:
+        #     await update.message.reply_text(error_msg, parse_mode="Markdown")
+        #     return
+
         msg = await update.message.reply_text(
             "⏳ Cargando reporte matutino...",
             parse_mode="Markdown"
         )
-        
-        # Obtener datos de APIs
+
         data = await fetch_all_data_for_today()
-        
-        if "error" in 
+
+        if "error" in data:
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=msg.message_id,
@@ -64,30 +58,26 @@ async def analisis(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
             return
-        
-        # Generar análisis con IA (o servir caché)
+
         analysis_text = await generate_daily_analysis(data)
-        
-        # Truncar si es muy largo
+
         if len(analysis_text) > 4000:
             analysis_text = analysis_text[:3900] + "\n\n... _(mensaje truncado)_"
-        
-        # Enviar análisis
+
         await context.bot.edit_message_text(
             chat_id=update.effective_chat.id,
             message_id=msg.message_id,
             text=analysis_text,
             parse_mode="Markdown"
         )
-        
+
     except Exception as e:
         logger.error(f"Error en /analisis: {e}", exc_info=True)
         await update.message.reply_text(f"❌ Error: {str(e)[:100]}...")
 
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muestra el estado de uso del usuario"""
     chat_id = update.effective_chat.id
-    
+
     def _get_status():
         import sqlite3
         conn = sqlite3.connect("bot_users.db")
@@ -95,17 +85,17 @@ async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cursor.execute('SELECT last_analysis_date, subscribed FROM users WHERE chat_id = ?', (chat_id,))
         row = cursor.fetchone()
         conn.close()
-        
+
         if not row:
             return "📊 *Estado*\nNo tienes registro de uso."
-        
+
         last_date = row[0]
         subscribed = row[1]
-        
+
         status = "📊 *Estado*\n\n"
         status += f"Último análisis: {last_date or 'Nunca'}\n"
         status += f"Notificaciones: {'✅ Activadas' if subscribed else '🔕 Desactivadas'}\n\n"
-        
+
         if last_date:
             today = datetime.datetime.now().strftime("%Y-%m-%d")
             if last_date == today:
@@ -114,9 +104,9 @@ async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status += "✅ Puedes consultar hoy."
         else:
             status += "✅ Nunca has consultado. ¡Prueba /analisis!"
-        
+
         return status
-    
+
     try:
         status_text = await asyncio.to_thread(_get_status)
         await update.message.reply_text(status_text, parse_mode="Markdown")
@@ -128,7 +118,7 @@ async def suscribirse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     nuevo_estado = await db.toggle_subscription(chat_id)
     estado_texto = "✅ ACTIVADAS" if nuevo_estado else "🔕 DESACTIVADAS"
-    
+
     await update.message.reply_text(
         f"🔔 *Notificaciones diarias: {estado_texto}*\n\n"
         "Recibirás el análisis con IA automáticamente antes de los primeros juegos.",
@@ -138,14 +128,14 @@ async def suscribirse(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not BOT_TOKEN:
         raise ValueError("⚠️ TELEGRAM_BOT_TOKEN no encontrado en .env")
-    
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("analisis", analisis))
     app.add_handler(CommandHandler("estado", estado))
     app.add_handler(CommandHandler("suscribirse", suscribirse))
-    
+
     logger.info("✅ Bot matutino iniciado. Escuchando comandos...")
     app.run_polling(
         allowed_updates=Update.ALL_TYPES,
