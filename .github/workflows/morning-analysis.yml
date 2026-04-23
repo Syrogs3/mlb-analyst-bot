@@ -2,40 +2,29 @@ name: 🕗 Generar Análisis Matutino MLB
 
 on:
   schedule:
-    # Ejecuta a las 12:00 UTC = 8:00 AM EDT (Eastern Daylight Time)
-    # Si quieres 8:00 AM EST (Eastern Standard Time), cambia a: 0 13 * * *
+    # Ejecuta a las 12:00 UTC = 8:00 AM EDT
     - cron: '0 12 * * *'
-  workflow_dispatch: # Permite ejecutar manualmente desde GitHub
+  workflow_dispatch:
 
 jobs:
   trigger-morning-analysis:
     runs-on: ubuntu-latest
     steps:
-      - name: 📤 Disparar análisis al bot de Telegram
+      - name: 📤 Disparar análisis al bot
         run: |
-          echo "⏰ Iniciando análisis matutino programado..."
-          echo "🕐 Hora UTC: $(date -u)"
+          echo "⏰ Enviando /analisis al bot..."
           
-          # Enviar comando /analisis al bot
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"chat_id\": ${{ secrets.ADMIN_CHAT_ID }},
-              \"text\": \"/analisis\"
-            }" \
+            -d "{\"chat_id\": ${{ secrets.ADMIN_CHAT_ID }}, \"text\": \"/analisis\"}" \
             --max-time 90)
           
-          # Extraer código HTTP (última línea)
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           
-          echo "📡 Respuesta del servidor: $HTTP_CODE"
-          
           if [ "$HTTP_CODE" -eq 200 ]; then
-            echo "✅ ¡Análisis disparado exitosamente!"
-            echo "📱 Revisa tu Telegram en 1-2 minutos"
+            echo "✅ Análisis disparado"
           else
-            echo "❌ Error al disparar el análisis"
-            echo "Detalles: $RESPONSE"
+            echo "❌ Error: $HTTP_CODE"
             exit 1
           fi
