@@ -37,12 +37,6 @@ async def analisis(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         chat_id = update.effective_chat.id
 
-        # 🔒 LÍMITE DIARIO DESHABILITADO PARA PRUEBAS
-        # can_use, error_msg = await db.can_user_analyze(chat_id)
-        # if not can_use:
-        #     await update.message.reply_text(error_msg, parse_mode="Markdown")
-        #     return
-
         msg = await update.message.reply_text(
             "⏳ Cargando reporte matutino...",
             parse_mode="Markdown"
