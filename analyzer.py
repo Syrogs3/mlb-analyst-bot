@@ -78,14 +78,14 @@ async def generate_daily_analysis(data: dict) -> str:
                 {"role": "system", "content": SYSTEM_PROMPT.format(date=today)},
                 {"role": "user", "content": f"Datos matutinos:\n{payload}"}
             ],
-            temperature=0.0,      # 🔒 Cero creatividad
-            seed=42,              # 🔒 Reproducibilidad
+            temperature=0.0,
+            seed=42,
             max_tokens=450,
             top_p=0.9
         )
 
         analysis = response.choices[0].message.content.strip()
-        cache_manager.save_analysis(analysis)  # 💾 Guardar para todo el día
+        cache_manager.save_analysis(analysis)
         logger.info("✅ Análisis matutino generado y cacheado")
         return analysis
 
